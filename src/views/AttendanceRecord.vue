@@ -96,10 +96,6 @@
                         First Name
                         <i :class="getSortIcon('firstName')"></i>
                       </th>
-                      <th @click="sort('middleName')" class="sortable">
-                        Middle Name
-                        <i :class="getSortIcon('middleName')"></i>
-                      </th>
                       <th @click="sort('email')" class="sortable">
                         Email
                         <i :class="getSortIcon('email')"></i>
@@ -125,7 +121,6 @@
                       </td>
                       <td><strong>{{ student.lastName }}</strong></td>
                       <td>{{ student.firstName }}</td>
-                      <td>{{ student.middleName }}</td>
                       <td>{{ student.email }}</td>
                     </tr>
                   </tbody>
@@ -137,43 +132,48 @@
       </div>
     </div>
 
-    <!-- Add Student Dialog -->
-    <div v-if="showAddStudentDialog" class="modal-overlay">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Add an Existing Student</h5>
-            <button type="button" class="btn-close" @click="closeAddStudentDialog"></button>
+   <!-- Add Student Dialog -->
+   <div v-if="showAddStudentDialog" class="modal-overlay">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add a Student</h5>
+        <button type="button" class="btn-close" @click="closeAddStudentDialog">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form @submit.prevent="addStudent">
+          <div class="mb-3">
+            <label for="firstName" class="form-label">First Name</label>
+            <input 
+              type="text" 
+              id="firstName" 
+              v-model="firstName" 
+              class="form-control" 
+              placeholder="Enter first name" 
+              required
+            />
           </div>
-          <div class="modal-body">
-            <form @submit.prevent="addStudent">
-              <div class="mb-3">
-                <label for="studentName" class="form-label">Student Name</label>
-                <select 
-                  id="studentName" 
-                  v-model="selectedStudent" 
-                  class="form-select" 
-                  required
-                >
-                  <option value="">Select a student</option>
-                  <option 
-                    v-for="student in availableStudents" 
-                    :key="student.studentNumber" 
-                    :value="student"
-                  >
-                    {{ student.lastName }}, {{ student.firstName }} {{ student.middleName }}
-                  </option>
-                </select>
-              </div>
-              <div class="d-flex justify-content-end gap-2">
-                <button type="button" class="btn btn-secondary" @click="closeAddStudentDialog">Close</button>
-                <button type="submit" class="btn btn-primary" :disabled="!selectedStudent">Add Student</button>
-              </div>
-            </form>
+          <div class="mb-3">
+            <label for="lastName" class="form-label">Last Name</label>
+            <input 
+              type="text" 
+              id="lastName" 
+              v-model="lastName" 
+              class="form-control" 
+              placeholder="Enter last name" 
+              required
+            />
           </div>
-        </div>
+          <div class="mb-3">
+            <button class="btn btn-light btn-sm" type="submit">
+              <span class="material-symbols-outlined">add</span>Add Student
+            </button>
+          </div>
+        </form>
       </div>
     </div>
+  </div>
+</div>
 
     <!-- Delete Students Dialog -->
     <div v-if="showDeleteDialog" class="modal-overlay">
@@ -209,10 +209,10 @@
     </div>
   </div>
 </template>
-
 <script>
 import flatpickr from "flatpickr";
 import "flatpickr/dist/flatpickr.css";
+import axios from 'axios';
 
 export default {
   data() {
@@ -223,33 +223,155 @@ export default {
       selectedStudent: null,
       selectedDate: null,
       searchQuery: '',
-      showAddStudentDialog: false,
+      showAddStudentDialog: false,  
       showDeleteDialog: false,
       sortKey: '',
       sortOrder: 'asc',
-      isMobile: false
+      isMobile: false,
+      firstName: "",  
+      lastName: "",   
     };
   },
   computed: {
     filteredStudents() {
+      if (!Array.isArray(this.students)) {
+        console.error("students is not an array", this.students);
+        return [];
+      }
+
       let filtered = this.students.filter(student => {
         const searchString = Object.values(student).join(' ').toLowerCase();
         return searchString.includes(this.searchQuery.toLowerCase());
       });
 
-      // Apply sorting
       return filtered.sort((a, b) => {
         const sortValueA = a[this.sortKey] || '';
         const sortValueB = b[this.sortKey] || '';
-        if (this.sortOrder === 'asc') {
-          return sortValueA.localeCompare(sortValueB);
-        } else {
-          return sortValueB.localeCompare(sortValueA);
-        }
+        return this.sortOrder === 'asc'
+          ? sortValueA.localeCompare(sortValueB)
+          : sortValueB.localeCompare(sortValueA);
       });
     }
   },
   methods: {
+    // Show dialog to add student - Renamed method to avoid conflict
+    openAddStudentDialog() {
+      this.showAddStudentDialog = true;
+    },
+
+    // Close the Add Student dialog
+    closeAddStudentDialog() {
+      this.showAddStudentDialog = false;
+    },
+
+    async addStudent() {
+      if (!this.firstName || !this.lastName) {
+        alert('Please enter both first and last names.');
+        return;
+      }
+
+      const token = localStorage.getItem('token'); 
+
+      if (!token) {
+        console.error('No JWT token found');
+        alert('Please log in again.');
+        return;
+      }
+
+      try {
+        const newStudent = {
+          first_name: this.firstName,
+          last_name: this.lastName,
+        };
+
+        const response = await axios.post(
+          'http://localhost/Check_Ease/vue-login-backend/addStudent.php', 
+          newStudent, 
+          {
+            headers: { 'Authorization': `Bearer ${token}` },  
+          }
+        );
+
+        if (response.data.success) {
+          console.log('Student added successfully');
+          this.fetchStudents(); 
+          this.closeAddStudentDialog(); 
+        } else {
+          console.error('Failed to add student:', response.data.message);
+        }
+      } catch (error) {
+        console.error('Error adding student:', error);
+      }
+    },
+
+    deleteSelectedStudents() {
+      this.showDeleteDialog = true;
+    },
+
+    confirmDelete() {
+      this.students = this.students.filter(student => !student.selected);
+      this.showDeleteDialog = false;
+    },
+
+    cancelDelete() {
+      this.showDeleteDialog = false;
+    },
+
+    async fetchStudents() {
+      try {
+        // Retrieve the JWT token from localStorage
+        const jwtToken = this.getJWTToken();
+
+        if (!jwtToken) {
+          console.error("JWT token is missing or expired.");
+          return; 
+        }
+
+        // Make the GET request to fetch students
+        const response = await axios.get('http://localhost/Check_Ease/vue-login-backend/fetchStudents.php', {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`, 
+          }
+        });
+
+        // Handle the response
+        if (response.data.success) {
+          this.students = response.data.students;
+        } else {
+          console.error('Error fetching students:', response.data.message || 'Unknown error');
+        }
+      } catch (error) {
+        console.error('Error in fetchStudents:', error);
+      }
+    },
+
+    getJWTToken() {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error("JWT token is missing");
+        return null; 
+      }
+
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1])); 
+        const exp = payload.exp; 
+        const currentTime = Date.now() / 1000;
+
+        // Check if the token has expired
+        if (exp < currentTime) {
+          console.error("JWT token has expired");
+          window.location.href = "/login"; 
+          return null; 
+        }
+
+        return token; 
+      } catch (error) {
+        console.error("Error decoding JWT token:", error);
+        return null; 
+      }
+    },
+
+    // Sorting method
     sort(key) {
       if (this.sortKey === key) {
         this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
@@ -258,57 +380,35 @@ export default {
         this.sortOrder = 'asc';
       }
     },
+
+    // Get sort icon
     getSortIcon(key) {
-      return this.sortKey === key ? (this.sortOrder === 'asc' ? 'bi bi-caret-down-fill' : 'bi bi-caret-up-fill') : '';
+      return this.sortKey === key
+        ? this.sortOrder === 'asc'
+          ? 'bi bi-caret-down-fill'
+          : 'bi bi-caret-up-fill'
+        : '';
     },
-    formatDate(date) {
-      return new Date(date).toLocaleDateString();
-    },
-    getStatusClass(status) {
-      switch (status) {
-        case 'PRESENT': return 'status-present';
-        case 'ABSENT': return 'status-absent';
-        case 'LATE': return 'status-late';
-        default: return '';
-      }
-    },
-    handleStatusChange(student) {
-      // Additional handling can be done when attendance status is changed
-    },
-    addStudent() {
-      if (this.selectedStudent && !this.students.some(student => student.studentNumber === this.selectedStudent.studentNumber)) {
-        this.students.push(this.selectedStudent);
-        this.selectedStudent = null;
-        this.closeAddStudentDialog();
-      }
-    },
-    closeAddStudentDialog() {
-      this.showAddStudentDialog = false;
-    },
-    deleteSelectedStudents() {
-      this.showDeleteDialog = true;
-    },
-    confirmDelete() {
-      this.students = this.students.filter(student => !student.selected);
-      this.showDeleteDialog = false;
-    },
-    cancelDelete() {
-      this.showDeleteDialog = false;
+
+    getStatusClass(student) {
+  if (student && student.status) {
+    return student.status === 'present' ? 'present' : 'absent';
+  }
+  return ''; 
+},
+
+    mounted() {
+      this.fetchStudents();
+      flatpickr(this.$refs.mobileDatePicker, { dateFormat: "Y-m-d", onChange: this.handleDateChange });
+      flatpickr(this.$refs.datePickerBtn, { dateFormat: "Y-m-d", onChange: this.handleDateChange });
     }
-  },
-  mounted() {
-    // Initialize date picker
-    flatpickr(this.$refs.mobileDatePicker, { dateFormat: "Y-m-d", onChange: this.handleDateChange });
-    flatpickr(this.$refs.datePickerBtn, { dateFormat: "Y-m-d", onChange: this.handleDateChange });
   }
 };
 </script>
 
-<style scoped>
-/* Add your custom styles here */
-</style>
 
 <style scoped>
+
 .table-container {
   width: 100%;
   max-width: 1250px;

@@ -17,6 +17,7 @@
               <strong class="classSection">{{ classItem.section }}</strong><br>
               <p class="card-text"><strong>Class Name: </strong>{{ classItem.class_name }}</p>
               <p class="card-text"><strong>Class Code: </strong>{{ classItem.class_code }}</p>
+              <p class="card-text"><strong>Class Capacity: </strong>{{ classItem.capacity }}</p>
             </div>
             <!-- View Attendance and Take Attendance Buttons -->
             <router-link
@@ -109,12 +110,9 @@ export default {
 };
 </script>
 
-
-
-
 <style scoped>
 .classSection {
-  font-size: 2.5rem; /* Adjust this value as needed */
+  font-size: 2.5rem; 
   font-weight: bold;
 }
   .custom-btn {

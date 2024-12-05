@@ -1,32 +1,66 @@
 <?php
-include 'Cors.php';  
-require __DIR__ . '/vendor/autoload.php';  
-require '../db.php';  
-session_start();  
+// Include the necessary files
+require __DIR__ . '/vendor/autoload.php';
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
-if (!isset($_SESSION['user_id'])) {
-    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+include 'Cors.php';
+include 'db.php';
+include 'validate.php';
+
+session_start();
+
+$authorizationHeader = getAuthorizationHeader();
+error_log("Authorization Header: " . $authorizationHeader);
+
+if (!$authorizationHeader) {
+    echo json_encode(['success' => false, 'message' => 'Missing Token']);
     exit;
 }
 
+list($jwt) = sscanf($authorizationHeader, 'Bearer %s');
+error_log("JWT Token: " . $jwt);
+
+$decoded = validateJWT($jwt);
+
+if (!$decoded) {
+    echo json_encode(['success' => false, 'message' => 'Unauthorized - Invalid or Expired JWT']);
+    exit;
+}
+
+$user_id = $decoded->id;
+error_log("User ID: " . $user_id);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $data = json_decode(file_get_contents('php://input'), true);
-    $class_id = (int)$data['class_id'];
-    $student_id = (int)$data['student_id'];
+    $data = json_decode(file_get_contents("php://input"), true);
+
+    $first_name = $data['first_name'] ?? null;
+    $last_name = $data['last_name'] ?? null;
+
+    // Validate that first name and last name are provided
+    if (!$first_name || !$last_name) {
+        echo json_encode(['success' => false, 'message' => 'First name and last name are required.']);
+        exit;
+    }
 
     try {
-        $stmt = $pdo->prepare("SELECT id FROM class_students WHERE class_id = ? AND student_id = ?");
-        $stmt->execute([$class_id, $student_id]);
+        // Insert the student into the students table
+        $sql = "INSERT INTO students (first_name, last_name, user_id) VALUES (:first_name, :last_name, :user_id)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':first_name' => $first_name,
+            ':last_name' => $last_name,
+            ':user_id' => $user_id,
+        ]);
 
-        if ($stmt->rowCount() === 0) {
-            $stmt = $pdo->prepare("INSERT INTO class_students (class_id, student_id) VALUES (?, ?)");
-            $stmt->execute([$class_id, $student_id]);
-            echo json_encode(['success' => true, 'message' => 'Student added to class']);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Student already in class']);
-        }
-    } catch (PDOException $e) {
-        echo json_encode(['success' => false, 'message' => 'Error adding student']);
+        $student_id = $pdo->lastInsertId();
+
+
+        echo json_encode(['success' => true, 'message' => 'Student added successfully']);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => 'Failed to add student: ' . $e->getMessage()]);
     }
+} else {
+    echo json_encode(['success' => false, 'message' => 'Invalid request method']);
 }
 ?>

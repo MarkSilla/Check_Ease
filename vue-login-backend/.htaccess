@@ -1,4 +1,4 @@
-# .htaccess
+<IfModule mod_rewrite.c>
 
 SetEnv JWT_SECRET_KEY "ayawqna"
 
@@ -8,3 +8,4 @@ RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ index.php [QSA,L]
 
+</IfModule>

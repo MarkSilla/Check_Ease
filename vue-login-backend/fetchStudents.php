@@ -1,26 +1,47 @@
 <?php
-include 'Cors.php';
-require __DIR__ . '/vendor/autoload.php';
-require '../db.php';
-session_start();
 
-// Check if the session user_id is set and valid
-if (!isset($_SESSION['user_id'])) {
-    echo json_encode(['success' => false, 'message' => 'Unauthorized - Missing session user_id']);
+// Include necessary files
+include 'Cors.php';  
+require __DIR__ . '/vendor/autoload.php';  // Composer autoloader
+require('db.php');  
+require 'validate.php'; 
+
+// Get headers
+$headers = getallheaders();
+
+// Check for Authorization header
+if (!isset($headers['Authorization'])) {
+    echo json_encode(['success' => false, 'message' => 'Unauthorized - Missing Authorization Header']);
+    exit;  
+}
+
+$authHeader = $headers['Authorization'];
+list($jwt) = sscanf($authHeader, 'Bearer %s');  
+
+// If JWT token is missing
+if (!$jwt) {
+    echo json_encode(['success' => false, 'message' => 'Unauthorized - Missing JWT token']);
     exit;
 }
 
 try {
-    // Prepare and execute the query to fetch students
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE role = 'student'");
-    $stmt->execute();
+    // Decode JWT token
+    $decoded = \Firebase\JWT\JWT::decode($jwt, new \Firebase\JWT\Key($secret_key, 'HS256'));
+    $user_id = $decoded->data->id;
+    $stmt = $pdo->prepare("SELECT * FROM students WHERE user_id = ?");
+    $stmt->execute([$user_id]);
     $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Return the result as a JSON response
     echo json_encode(['success' => true, 'students' => $students]);
+
+} catch (Exception $e) {
+    // Log error if JWT is invalid or expired
+    error_log("Error decoding JWT: " . $e->getMessage());
+    echo json_encode(['success' => false, 'message' => 'Invalid or expired JWT token']);
 } catch (PDOException $e) {
-    // Log the error for debugging purposes
+    // Log error if there's a problem with the database query
     error_log("Error fetching students: " . $e->getMessage());
     echo json_encode(['success' => false, 'message' => 'Error fetching students']);
 }
+
 ?>
